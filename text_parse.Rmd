@@ -1,0 +1,279 @@
+---
+title: "Search Results"
+output: html_document
+#classoption: landscape
+header-includes:
+  - \usepackage{xcolor}
+  - \usepackage{framed}
+---
+
+```{r basic, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+cat("\014")  
+setwd("C:/Users/thewarap/Desktop/collab/study")
+
+
+library(pdfsearch) #to extract material from study protocols
+library(dplyr)
+library(tableHTML) #output
+library(stringr) #for function1 and function2
+
+
+
+#Functions
+#These function will be used to bold 'search criteria' in the html output.
+replace_word1 <- function(df) {
+  
+  stringr::str_replace_all(string = df$kwic,
+                       pattern = "[[<]]",
+                       replacement = "<strong>") #replace < with <strong>
+  
+}
+
+replace_word2 <- function(df) {
+  
+  stringr::str_replace_all(string = df$kwic,
+                           pattern = "(?<!strong)[[>]]",
+                           replacement = "</strong>") #replace > with </strong>. 'strong' should not appear before <.
+  
+}
+
+
+
+# change this to directory where files are located
+directory <- getwd()
+
+inclusion <- keyword_directory(directory, keyword=c('inclusion criteria'),
+                               surround_lines = 40, file_pattern = ".pdf") #extracts keyword and 40 surrounding lines
+
+
+inclusion <- inclusion %>%
+              {gsub(".*Inclusion","",.)} %>% #limit everything after inclusion
+              {gsub("Exclusion.*","",.)} %>% #and before exclusion
+              {gsub("\", \"","" ,.)} %>% #these two lines remove special chracters
+              {gsub("\", \n\"","" ,.)}
+  
+  
+inclusion[6]
+
+
+
+
+
+
+exclusion <- keyword_directory(directory, "exclusion criteria", surround_lines = 40,
+                               file_pattern = ".pdf")
+
+
+exclusion <- exclusion %>%
+            {gsub(".*Exclusion","",.)} %>%
+            #{gsub("       .*","",.)} %>%
+            #{gsub("TREATMENT PLAN.*","",.)} %>%
+            {gsub("[[:digit:]][[:punct:]][[:digit:]][[:space:]]*[[:alpha:]].*","",.)} %>% #https://rstudio.com/wp-content/uploads/2016/09/RegExCheatsheet.pdf
+            {gsub("\", \"","" ,.)} %>%
+            {gsub("\", \n\"","" ,.)}
+
+
+exclusion[6]
+
+
+
+            
+
+library(corpustools) #textparsing package
+
+tc<-create_tcorpus(inclusion, doc_column = "id")
+stan_inc<- c('"No (pr* OR evidence)"~2',
+             '"HIPEC"~s', #capital words only
+             '"(pregn* test) OR contraception OR (post-menopausal) OR (post menopausal)
+                          OR (negative urin* or serum pregnancy test)"', #BOOLEAN, parantheses determine order of operations
+             '"Karnofsky"',
+             '"(HER2 positive) OR (HER2-positive)"',
+             '"swallow (drug OR pill OR tablet)"~3', #second word must be within a distance of 3 words
+             '"provide samples"~5',
+             '"Diagnosis of"',
+             '"Body weight"',
+             '"Willing to"',
+             '"measurable disease"',
+             '"Absence of"',
+             '"Age (18 OR eighteen)"~5',
+             '"Medic* fi*"~2',
+             '"ECOG"~s',
+             '"life expect*"',
+             '"Written Consent"~3',
+             '"child* potential"~3',
+             '"RECIST"~s',
+             '"Pr* (treatment OR therapy OR radiation OR chemotherapy)"~3',
+             '"Adequate organ and marrow"')
+
+
+
+hits_inclusion <- tc$search_features(c(stan_inc))
+kwic_inclusion <- tc$kwic(hits_inclusion, ntokens=10)
+
+```
+
+$~$
+
+## Output for inclusion criteria:
+
+$~$
+
+\renewcommand{\arraystretch}{2}
+```{r inc, echo=FALSE}
+
+
+kwic_inclusion <- kwic_inclusion %>% 
+  mutate(id = row_number())
+
+
+cols <- c(6,5)
+df <- kwic_inclusion[,cols] #Extract just the ID and string column
+
+
+df %>% 
+  rowwise %>% 
+  do({
+    df = as_tibble(.)
+    df$kwic = replace_word1(df) #apply function 1 to df
+    df$kwic = replace_word2(df)
+    df
+  }) %>% 
+  tableHTML(rownames = FALSE,
+            escape = FALSE,
+            headers = c('ID', 'String'),
+            spacing = '2px 10px',
+            collapse = 'separate_shiny')  %>%
+  add_theme('rshiny-blue')
+  
+
+
+
+
+
+#https://stackoverflow.com/questions/51835967/how-to-highlight-certain-strings-in-r-tablehtml
+#https://stackoverflow.com/questions/26819258/format-text-inside-r-code-chunk
+#https://stackoverflow.com/questions/56756977/conditional-formatting-for-strings-with-grep-in-kable
+#https://stackoverflow.com/questions/58923973/can-i-use-r-to-highlight-some-words-background-color-in-a-paragraph
+
+
+```
+
+```{r basic2, include=FALSE}
+cancer <- c('"(metas* OR cancer OR trastuzumab OR malig* OR tumor OR advanced OR (tumor tissue) OR
+              (chemotherapy OR radiation OR radiotherapy))"~5')
+
+hits_cancer <- tc$search_features(c(cancer))
+kwic_cancer <- tc$kwic(hits_cancer, ntokens=5)
+```
+
+$~$
+
+## Output for cancer criteria:
+
+$~$
+
+\renewcommand{\arraystretch}{2}
+```{r can, echo=FALSE}
+
+kwic_cancer <- kwic_cancer %>% 
+  mutate(id = row_number())
+
+
+cols <- c(6,5)
+df <- kwic_cancer[,cols]
+
+
+df %>% 
+  rowwise %>% 
+  do({
+    df = as_tibble(.)
+    df$kwic = replace_word1(df)
+    df$kwic = replace_word2(df)
+    df
+  }) %>% 
+  tableHTML(rownames = FALSE,
+            escape = FALSE,
+            headers = c('ID', 'String'),
+            spacing = '2px 10px',
+            collapse = 'separate_shiny')  %>%
+  add_theme('rshiny-blue') 
+
+```
+
+
+
+```{r basic3, include=FALSE}
+tc<-create_tcorpus(exclusion, doc_column = "id")
+exclu <- c('"pregnant"',
+            '"No caregiver*"~2',
+            '"Prior (treatment OR use)"',
+            '"(currently using) OR (planning to use) OR (current or anticipated use)
+                      OR (current use) OR ((simultaneously OR concurrent) enrollment) 
+                      OR (currently participating) OR (active treatment)"',
+               '"participation study"~3',
+               '"no barrier"',
+               '"<history of> NOT No"~3',
+               '"aller*"',
+               '"uncontrolled intercurrent illness"',
+               '"malig*"',
+               '"male patients"',
+               '"Diagnosis of"',
+               '"Recei* (treatment OR agent OR chemotherpay OR radi* OR surgery)"~3',
+               '"active autoimmune"~5',
+               '"Heptatitis"',
+               '"psychiatric illness"',
+               '"hypersensitivity"',
+               '"No (evidence OR known history)"',
+               '"(Human Immunodeficiency Virus OR HIV*) OR AIDS"',
+               '"(Chemotherpahy OR radi*) within"~5',
+               '"Pri* therapy"~1',
+               '"Inability OR Unable"',
+               '"Clinicially significant"',
+               '"Major surgery"',
+               '"(Patien* with) OR (Patien* has) OR (subjec* with) OR (subjec* has)"',
+               '"Obesity"')
+
+
+hits_exclusion <- tc$search_features(c(exclu))
+kwic_exclusion <- tc$kwic(hits_exclusion, ntokens=10)
+```
+
+
+$~$
+
+## Output for exclusion criteria:
+
+$~$
+
+```{r exl, echo=FALSE}
+kwic_exclusion <- kwic_exclusion %>% 
+  mutate(id = row_number())
+
+
+cols <- c(6,5)
+df <- kwic_exclusion[,cols]
+
+
+
+df %>% 
+  rowwise %>% 
+  do({
+    df = as_tibble(.)
+    df$kwic = replace_word1(df)
+    df$kwic = replace_word2(df)
+    df
+  }) %>% 
+  tableHTML(rownames = FALSE,
+            escape = FALSE,
+            headers = c('ID', 'String'),
+            spacing = '2px 10px',
+            collapse = 'separate_shiny')  %>%
+  add_theme('rshiny-blue')
+
+```
+
+$~$
+
+$~$
